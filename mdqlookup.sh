@@ -1,5 +1,17 @@
 #!/usr/bin/env bash
 
+### SAML2 Metadata Query Lookup tool ############
+#
+# Copyright (c) 2019 Jisc, Matthew Slowe
+# MIT License
+#
+# Usage: mdqlookup.sh <entityid> [ <mdqendpoint> ]
+# 
+# Environment variables:
+#   - MDQENDPOINT (can be used instead of specifying on the command line)
+#   - CURLOPTS    (for overriding the default "-s" to curl)
+#################################################
+
 ENTITYID=${1:?EntityID not specified. Usage: $0 <entityid> [ mdqendpoint ]}
 MDQENDPOINT=${2:-${MDQENDPOINT:-http://mdq.ukfederation.org.uk/entities/}}
 CURLOPTS=${CURLOPTS:-'-s'}
