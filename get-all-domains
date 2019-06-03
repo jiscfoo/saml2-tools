@@ -1,0 +1,9 @@
+#!/bin/bash
+
+perl -ne 'if(m~https?://([a-zA-Z0-9\-_]+(?:\.[a-zA-Z0-9\-_]+)+)/~) { print $1, "\n"; }' |
+ sort |
+ uniq |
+ cut -d/ -f 3 |
+ perl -pe '@x=split(/\./); @out = @x[-2,-1]; @out = @x[-3,-2,-1] if $x[-2] eq "ac"; $_= join(".", @out);' |
+ sort |
+ uniq
