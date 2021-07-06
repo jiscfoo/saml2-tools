@@ -1,4 +1,6 @@
-# Python 3 server example
+# Invoke as: python start-authn-request.py <victim_sso_service_url>
+# Then access: http://localhost:8080/
+
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import time
 import random
