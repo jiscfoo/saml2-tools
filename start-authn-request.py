@@ -10,10 +10,21 @@ import html
 import base64
 import sys
 import zlib
+import urllib
 
 hostName = "localhost"
 serverPort = 8080
 sso_url = sys.argv[1]
+
+# https://docs.oasis-open.org/security/saml/v2.0/saml-authn-context-2.0-os.pdf
+authn_classes = [
+    "urn:oasis:names:tc:SAML:2.0:ac:classes:PasswordProtectedTransport",
+    "urn:oasis:names:tc:SAML:2.0:ac:classes:Password",
+    "urn:oasis:names:tc:SAML:2.0:ac:classes:Kerberos",
+    "urn:oasis:names:tc:SAML:2.0:ac:classes:X509",
+    "urn:oasis:names:tc:SAML:2.0:ac:classes:InternetProtocol",
+    "https://refeds.org/profile/mfa",
+]
 
 request_template = '''<samlp:AuthnRequest xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol"
                     ID="__ID__"
@@ -60,30 +71,58 @@ def deflate(b):
     out = compresser.flush()
     return out
 
+def get_authn_class(qs):
+    desired_class = qs.get("authn_class")
+    if desired_class:
+        if desired_class[0] in authn_classes:
+            return desired_class[0]
+        else:
+            raise Exception("Unknown authn_class")
+    return authn_classes[0]
+
+def send_error(self, message, code = 500):
+    self.send_response(code)
+    self.send_header("Content-type", "text/html")
+    self.end_headers()
+    self.wfile.write(bytes(message, "utf-8"))
+
 class MyServer(BaseHTTPRequestHandler):
     def do_GET(self):
 
         acs = "https://test.ukfederation.org.uk/Shibboleth.sso/SAML2/POST"
         sp_entityid = "https://test.ukfederation.org.uk/entity"
-        # authn_class = "https://refeds.org/profile/mfa"
-        authn_class = "urn:oasis:names:tc:SAML:2.0:ac:classes:PasswordProtectedTransport"
 
-        req = create_request(sso_url, acs, sp_entityid, authn_class)
+        query_string = urllib.parse.parse_qs(self.path[2:])
 
-        self.send_response(200)
-        self.send_header("Content-type", "text/html")
-        self.end_headers()
-        self.wfile.write(bytes("<html><head><title>AuthN context launcher</title></head>", "utf-8"))
-        self.wfile.write(bytes("<body>", "utf-8"))
-        self.wfile.write(bytes("<h1>SAML Authn Context launcher</h1>", "utf-8"))
-        self.wfile.write(bytes("<pre>" + html.escape(req) + "</pre>", "utf-8"))
-        self.wfile.write(bytes("<a href=\"" \
-            + sso_url + "?SAMLRequest=" \
-            + str(base64.urlsafe_b64encode(\
-                deflate(req.encode("utf-8"))
-            ), "utf-8") \
-            + "\">Go</a>", "utf-8"))
-        self.wfile.write(bytes("</body></html>", "utf-8"))
+        try:
+            authn_class = get_authn_class(query_string)
+
+            req = create_request(sso_url, acs, sp_entityid, authn_class)
+
+            self.send_response(200)
+            self.send_header("Content-type", "text/html")
+            self.end_headers()
+            self.wfile.write(bytes("<html><head><title>AuthN context launcher</title></head>", "utf-8"))
+            self.wfile.write(bytes("<body>", "utf-8"))
+
+            form_template = """<ul>"""
+            for c in authn_classes:
+                form_template += f"""  <li><a href="?authn_class={c}">{c}</a></li>"""
+            form_template += """</ul>"""
+
+            self.wfile.write(bytes(form_template, "utf-8"))
+            self.wfile.write(bytes("<h1>SAML Authn Context launcher</h1>", "utf-8"))
+            self.wfile.write(bytes("<pre>" + html.escape(req) + "</pre>", "utf-8"))
+            self.wfile.write(bytes("<a href=\"" \
+                + sso_url + "?SAMLRequest=" \
+                + str(base64.urlsafe_b64encode(\
+                    deflate(req.encode("utf-8"))
+                ), "utf-8") \
+                + "\">Go</a>", "utf-8"))
+            self.wfile.write(bytes("</body></html>", "utf-8"))
+
+        except Exception as e:
+            send_error(self, str(e.args))
 
 if __name__ == "__main__":
     webServer = HTTPServer((hostName, serverPort), MyServer)
